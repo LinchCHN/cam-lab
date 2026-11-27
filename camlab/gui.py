@@ -128,7 +128,7 @@ class MainWindow(QMainWindow):
         self.chk_info.setChecked(True)
         self.ed_text = QLineEdit()
         self.ed_text.setPlaceholderText("自定义文字(ASCII), 如: Station-A lot=20261127")
-        self.ed_out = QLineEdit(self.out_dir)
+        self.ed_out = QLineEdit("output")     # 相对路径基于当前工作目录解析
         btn_dir = QPushButton("...")
         btn_dir.setFixedWidth(36)
         btn_dir.clicked.connect(self._pick_dir)
@@ -203,6 +203,7 @@ class MainWindow(QMainWindow):
         return Mode(w, h, float(fps), pixel="MJPG")
 
     def _fill_modes_for(self, backend_name: str):
+        from .backends.demo import DEMO_MODES
         from .backends.mvs.backend import ROI_PRESETS
         from .backends.uvc import COMMON_MODES
         self.cmb_mode.clear()
@@ -212,6 +213,11 @@ class MainWindow(QMainWindow):
                 self.cmb_mode.addItem(f"{w}x{h}")
             self.cmb_pixel.setEnabled(True)
             self.cmb_binning.setEnabled(True)
+        elif backend_name == "demo":
+            for mode in DEMO_MODES:
+                self.cmb_mode.addItem(mode.label(), userData=mode)
+            self.cmb_pixel.setEnabled(False)
+            self.cmb_binning.setEnabled(False)
         else:
             default_idx = 0
             for mode in COMMON_MODES:
@@ -288,6 +294,11 @@ class MainWindow(QMainWindow):
             f" | 帧{self.worker.frames} 丢{self.worker.dropped}{rec}")
 
     # ---------- 动作 ----------
+    def _out_dir_resolved(self) -> str:
+        """输出目录: 支持相对路径(基于当前工作目录)。"""
+        text = self.ed_out.text().strip() or "output"
+        return text if os.path.isabs(text) else os.path.join(os.getcwd(), text)
+
     def _pick_dir(self):
         d = QFileDialog.getExistingDirectory(self, "选择输出目录", self.out_dir)
         if d:
@@ -308,7 +319,7 @@ class MainWindow(QMainWindow):
         if frame is None:
             QMessageBox.warning(self, "抓拍失败", "取帧超时")
             return
-        path = save_snapshot(frame, self.out_dir, now_str())
+        path = save_snapshot(frame, self._out_dir_resolved(), now_str())
         self.status.showMessage(f"抓拍已保存: {path}")
 
     def toggle_record(self):
@@ -317,7 +328,7 @@ class MainWindow(QMainWindow):
             return
         if not self.worker:
             return
-        self.out_dir = self.ed_out.text().strip() or DEFAULT_OUT_DIR
+        self.out_dir = self._out_dir_resolved()
         os.makedirs(self.out_dir, exist_ok=True)
         mode = self.session.actual_mode
         path = os.path.join(self.out_dir, f"rec_{now_str()}_{mode.label().replace(' ', '_')}.mp4")

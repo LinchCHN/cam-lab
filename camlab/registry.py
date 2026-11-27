@@ -45,10 +45,11 @@ registry = Registry()
 
 
 def _load_builtin() -> None:
+    from .backends import demo as demo_backend
     from .backends.mvs import backend as mvs_backend
     from .backends import uvc
 
-    for mod in (uvc, mvs_backend):
+    for mod in (uvc, mvs_backend, demo_backend):
         try:
             registry.register(mod.BackendImpl)
         except Exception as exc:

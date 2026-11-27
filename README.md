@@ -9,13 +9,20 @@ video recording with **burned-in timestamp OSD**. macOS / Linux / Windows.
 **Cam-Lab** 是一个面向工业相机与 USB 免驱动相机的采样实验平台，把「设备枚举 →
 模式选择 → 预览调参 → 抓拍/录像」做成一条顺滑的流水线。
 
+## 界面预览
+
+![Cam-Lab 录像中(时间戳内嵌)](docs/screenshots/recording.png)
+
+> 截图为无硬件 `demo` 虚拟设备(彩条测试图案)，实机接入 UVC/海康相机后界面一致。
+
 ## 功能
 
 - **多后端设备发现** — 自动聚合不同来源的设备:
   | 后端 | 覆盖 | 说明 |
   |---|---|---|
   | `uvc` | USB 免驱动相机 (UVC 协议) | OpenCV 采集: macOS AVFoundation / Windows DirectShow / Linux V4L2, 即插即用 |
-  | `mvs` | 海康威视/海康机器人工业相机 (GigE / USB3) | 自研 MVS SDK ctypes 绑定, 无需 SDK 样例代码 |
+  | `mvs` | 海康威视/海康机器人工业相机 (GigE / USB3) | 自研 MVS SDK ctypes 绑定(仓库不含 SDK 本体, 装好官方 Runtime 即自动识别) |
+  | `demo` | 无硬件虚拟信号源 | 彩条/渐变/动效测试图案, 零硬件体验与开发调试 |
 - **每台设备分辨率独立可调** — 模式列表按设备生成, 分辨率/帧率/像素格式/Binning
   分开选择, 打开后回读**实际协商值**(不撒谎)
 - **帧率实时显示** — 平滑 FPS + 帧间隔分布(中位/P95/最大), 卡顿一眼可见
@@ -71,6 +78,7 @@ camlab/
 ├── recording.py     # RecorderThread: 后台写盘/分段/丢帧计数
 ├── backends/
 │   ├── uvc.py       # OpenCV UVC (macOS/Win/Linux), 模式表+应用即校验
+│   ├── demo.py      # 无硬件虚拟信号源(彩条/动效测试图案)
 │   └── mvs/         # 海康 MVS: api.py(最小ctypes绑定) + backend.py(能力/会话)
 ├── gui.py           # PySide6 主窗口
 └── cli.py           # probe / grab / record / gui
