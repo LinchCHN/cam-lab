@@ -117,7 +117,8 @@ def cmd_record(args) -> int:
             continue
         stats.update()
         rec.put(frame, {"device": session.device.name, "mode": actual.label(),
-                        "fps": stats.fps, "frames": stats.frames, "dropped": 0})
+                        "fps": stats.fps, "frames": stats.frames, "dropped": 0,
+                        "rec": True})
     rec.join_and_release()
     print(f"完成: {rec.path}  写入{rec.frames_written}帧 采集{stats.frames}帧 "
           f"丢队列{rec.frames_dropped}  ({rec.fourcc})")
@@ -139,7 +140,7 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_probe)
 
     p = sub.add_parser("grab", help="抓帧测试(存首帧, 输出帧率统计)")
-    p.add_argument("-b", "--backend", default="uvc", choices=["uvc", "mvs"])
+    p.add_argument("-b", "--backend", default="uvc", choices=["uvc", "mvs", "demo"])
     p.add_argument("-d", "--device", help="设备id(uvc=索引, mvs=索引)")
     p.add_argument("-m", "--mode", help="模式, 如 1920x1080@30 MJPG")
     p.add_argument("-n", "--frames", type=int, default=30)
@@ -149,7 +150,7 @@ def main(argv=None) -> int:
     p.set_defaults(fn=cmd_grab)
 
     p = sub.add_parser("record", help="录像(可时间戳内嵌)")
-    p.add_argument("-b", "--backend", default="uvc", choices=["uvc", "mvs"])
+    p.add_argument("-b", "--backend", default="uvc", choices=["uvc", "mvs", "demo"])
     p.add_argument("-d", "--device")
     p.add_argument("-m", "--mode")
     p.add_argument("-t", "--seconds", type=float, default=10.0)

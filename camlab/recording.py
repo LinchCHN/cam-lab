@@ -51,7 +51,10 @@ class RecorderThread(threading.Thread):
 
     def stop(self) -> None:
         self._stop_event.set()
-        self._q.put(None)
+        try:                       # 唤醒空队列等待; 队列满时靠事件标志退出
+            self._q.put_nowait(None)
+        except Exception:
+            pass
 
     def join_and_release(self, timeout: float = 5.0) -> None:
         self.stop()
@@ -101,6 +104,7 @@ class RecorderThread(threading.Thread):
         return np.zeros((h, w, 3), dtype=np.uint8)
 
     def run(self) -> None:
+        import traceback
         while not self._stop_event.is_set():
             try:
                 item = self._q.get(timeout=0.5)
@@ -109,16 +113,20 @@ class RecorderThread(threading.Thread):
             if item is None:
                 break
             frame, info = item
-            if self._writer is None:
-                if not self._open_writer(frame):
-                    break
-            elif self.segment_seconds and \
-                    time.time() - self._seg_started >= self.segment_seconds:
-                self._roll_segment()
-            if self.overlay.enabled:
-                frame = make_timestamped(frame, self.overlay, info)
-            self._writer.write(frame)
-            self.frames_written += 1
+            try:
+                if self._writer is None:
+                    if not self._open_writer(frame):
+                        break
+                elif self.segment_seconds and \
+                        time.time() - self._seg_started >= self.segment_seconds:
+                    self._roll_segment()
+                if self.overlay.enabled:
+                    frame = make_timestamped(frame, self.overlay, info)
+                self._writer.write(frame)
+                self.frames_written += 1
+            except Exception:
+                self.error = traceback.format_exc()   # 记录并退出, 避免静默死亡
+                break
         self._release()
 
     @property

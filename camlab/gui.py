@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, Q
                                QPushButton, QSpinBox, QStatusBar, QVBoxLayout, QWidget)
 
 from .base import Mode
-from .overlay import OverlayConfig, now_str
+from .overlay import OverlayConfig, make_timestamped, now_str
 from .recording import RecorderThread, save_snapshot
 from .registry import registry
 from .stats import FpsCounter
@@ -52,9 +52,14 @@ class CaptureWorker(QThread):
             back2back = 0
             self.fps.update()
             self.frames += 1
+            rec = bool(self.recorder and self.recorder.is_alive())
             info = {"device": self.session.device.name,
                     "mode": self.session.actual_mode.label() if self.session.actual_mode else "",
-                    "fps": self.fps.fps, "frames": self.frames, "dropped": self.dropped}
+                    "fps": self.fps.fps, "frames": self.frames, "dropped": self.dropped,
+                    "rec": rec}
+            # 预览与录像共用同一份内嵌 OSD(预览即所得)
+            if self.overlay.enabled:
+                frame = make_timestamped(frame, self.overlay, info)
             if self.recorder and self.recorder.is_alive():
                 self.recorder.put(frame, info)
             self.frameReady.emit(frame, info)
@@ -127,7 +132,7 @@ class MainWindow(QMainWindow):
         self.chk_info = QCheckBox("分辨率/FPS/帧号")
         self.chk_info.setChecked(True)
         self.ed_text = QLineEdit()
-        self.ed_text.setPlaceholderText("自定义文字(ASCII), 如: Station-A lot=20261127")
+        self.ed_text.setPlaceholderText("自定义文字(支持中文), 如: Station-A 120度镜头 采集者:xxx")
         self.ed_out = QLineEdit("output")     # 相对路径基于当前工作目录解析
         btn_dir = QPushButton("...")
         btn_dir.setFixedWidth(36)
@@ -333,7 +338,8 @@ class MainWindow(QMainWindow):
         mode = self.session.actual_mode
         path = os.path.join(self.out_dir, f"rec_{now_str()}_{mode.label().replace(' ', '_')}.mp4")
         self.recorder = RecorderThread(path, mode.fps or 30, (mode.width, mode.height),
-                                       overlay=self._overlay_config(), segment_seconds=0)
+                                       overlay=OverlayConfig(enabled=False),
+                                       segment_seconds=0)
         self.recorder.start()
         self.worker.recorder = self.recorder
         self.btn_rec.setText("■ 停止录像")
