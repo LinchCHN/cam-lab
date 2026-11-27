@@ -10,7 +10,8 @@ from PySide6.QtCore import Qt, QThread, Signal, QUrl
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QFileDialog, QGridLayout, QGroupBox,
                                QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-                               QPushButton, QSpinBox, QStatusBar, QVBoxLayout, QWidget)
+                               QPlainTextEdit, QPushButton, QSpinBox, QStatusBar,
+                               QVBoxLayout, QWidget)
 
 from .base import Mode
 from .overlay import OverlayConfig, make_timestamped, now_str
@@ -122,29 +123,35 @@ class MainWindow(QMainWindow):
             self.cmb_binning.addItem(str(b), userData=b)
         self.cmb_binning.setCurrentIndex(1)      # 默认 Binning2 防千兆黑线
 
-        # OSD / 时间戳
-        gb_osd = QGroupBox("③ 时间戳内嵌 / OSD (写入视频像素)")
+        # OSD / 时间戳 (每行文字都可编辑)
+        gb_osd = QGroupBox("③ 时间戳内嵌 / OSD (写入视频像素, 每行均可编辑)")
         lay_osd = QGridLayout(gb_osd)
         self.chk_osd = QCheckBox("启用 OSD")
         self.chk_osd.setChecked(True)
-        self.chk_ts = QCheckBox("日期时间(毫秒)")
+        self.chk_ts = QCheckBox("时间戳:")
         self.chk_ts.setChecked(True)
-        self.chk_info = QCheckBox("分辨率/FPS/帧号")
+        self.ed_ts_fmt = QLineEdit("%Y-%m-%d %H:%M:%S")
+        self.chk_info = QCheckBox("信息行:")
         self.chk_info.setChecked(True)
-        self.ed_text = QLineEdit()
-        self.ed_text.setPlaceholderText("自定义文字(支持中文), 如: Station-A 120度镜头 采集者:xxx")
+        self.ed_info_fmt = QLineEdit("{rec}{mode}  {fps:.1f}fps  f#{frames}")
+        self.ed_info_fmt.setToolTip("占位符: {rec} {mode} {fps} {frames} {dropped} {device}")
+        self.ed_text = QPlainTextEdit()
+        self.ed_text.setPlaceholderText("自定义文字(支持中文, 可多行)\n如: 120度镜头 Station-A 采集者:xxx")
+        self.ed_text.setFixedHeight(64)
         self.ed_out = QLineEdit("output")     # 相对路径基于当前工作目录解析
         btn_dir = QPushButton("...")
         btn_dir.setFixedWidth(36)
         btn_dir.clicked.connect(self._pick_dir)
         lay_osd.addWidget(self.chk_osd, 0, 0)
-        lay_osd.addWidget(self.chk_ts, 0, 1)
-        lay_osd.addWidget(self.chk_info, 0, 2)
-        lay_osd.addWidget(QLabel("文字:"), 1, 0)
-        lay_osd.addWidget(self.ed_text, 1, 1, 1, 2)
-        lay_osd.addWidget(QLabel("输出:"), 2, 0)
-        lay_osd.addWidget(self.ed_out, 2, 1)
-        lay_osd.addWidget(btn_dir, 2, 2)
+        lay_osd.addWidget(self.chk_ts, 1, 0)
+        lay_osd.addWidget(self.ed_ts_fmt, 1, 1)
+        lay_osd.addWidget(self.chk_info, 2, 0)
+        lay_osd.addWidget(self.ed_info_fmt, 2, 1)
+        lay_osd.addWidget(QLabel("文字:"), 3, 0, Qt.AlignmentFlag.AlignTop)
+        lay_osd.addWidget(self.ed_text, 3, 1)
+        lay_osd.addWidget(QLabel("输出:"), 4, 0)
+        lay_osd.addWidget(self.ed_out, 4, 1)
+        lay_osd.addWidget(btn_dir, 4, 2)
 
         # 动作
         gb_act = QGroupBox("④ 动作")
@@ -313,8 +320,11 @@ class MainWindow(QMainWindow):
     def _overlay_config(self) -> OverlayConfig:
         return OverlayConfig(enabled=self.chk_osd.isChecked(),
                              show_timestamp=self.chk_ts.isChecked(),
+                             ts_format=self.ed_ts_fmt.text().strip() or "%Y-%m-%d %H:%M:%S",
                              show_info=self.chk_info.isChecked(),
-                             custom_text=self.ed_text.text().strip(),
+                             info_format=self.ed_info_fmt.text().strip()
+                             or "{rec}{mode}  {fps:.1f}fps  f#{frames}",
+                             custom_text=self.ed_text.toPlainText().strip(),
                              bg_alpha=0.45)
 
     def do_snapshot(self):

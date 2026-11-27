@@ -102,7 +102,8 @@ def cmd_record(args) -> int:
     os.makedirs(args.out, exist_ok=True)
     actual = session.actual_mode
     overlay = OverlayConfig(enabled=not args.no_osd, show_timestamp=not args.no_time,
-                            show_info=not args.no_info, custom_text=args.text or "")
+                            ts_format=args.ts_fmt, show_info=not args.no_info,
+                            info_format=args.info_fmt, custom_text=args.text or "")
     path = os.path.join(args.out, f"rec_{now_str()}_{actual.label().replace(' ', '_')}.mp4")
     rec = RecorderThread(path, actual.fps or 30, (actual.width, actual.height),
                          overlay=overlay, segment_seconds=args.segment)
@@ -157,6 +158,9 @@ def main(argv=None) -> int:
     p.add_argument("--binning", type=int)
     p.add_argument("--text", help="自定义OSD文字(ASCII)")
     p.add_argument("--segment", type=float, default=0, help="分段秒数(0=不分段)")
+    p.add_argument("--ts-fmt", default="%Y-%m-%d %H:%M:%S", help="时间戳strftime模板")
+    p.add_argument("--info-fmt", default="{rec}{mode}  {fps:.1f}fps  f#{frames}",
+                   help="信息行模板, 占位符 {rec}/{mode}/{fps}/{frames}/{dropped}/{device}")
     p.add_argument("--no-osd", action="store_true")
     p.add_argument("--no-time", action="store_true")
     p.add_argument("--no-info", action="store_true")

@@ -75,14 +75,21 @@ def _load_font(px: int):
 
 @dataclass
 class OverlayConfig:
-    """OSD 配置。中文文本需系统存在中文字体(PIL 路径)。"""
+    """OSD 配置。三行文字均可模板化:
+
+    - ts_format:   strftime 模板, 如 "%Y-%m-%d %H:%M:%S"
+    - info_format: 占位符模板, 可用 {rec} {mode} {fps} {frames} {dropped} {device}
+    - custom_text: 自定义多行文本(支持中文)
+    """
 
     enabled: bool = True
-    show_timestamp: bool = True       # 日期时间(毫秒->秒级)
-    show_info: bool = True            # REC/分辨率/帧率/帧号
-    custom_text: str = ""             # 自定义行(支持中文, \n 换行)
-    align: str = "right"              # right=右上角(参考风格) / left=左上角
-    color: tuple = (255, 255, 255)    # 文字颜色 RGB 白
+    show_timestamp: bool = True
+    ts_format: str = "%Y-%m-%d %H:%M:%S"
+    show_info: bool = True
+    info_format: str = "{rec}{mode}  {fps:.1f}fps  f#{frames}"
+    custom_text: str = ""             # 自定义多行(支持中文)
+    align: str = "right"              # right=右上角 / left=左上角
+    color: tuple = (255, 255, 255)    # RGB
     bg_alpha: float = 0.55
     margin: int = 14
     line_gap: int = 8
@@ -91,19 +98,24 @@ class OverlayConfig:
         """按配置生成要画的文本行。info: {mode,fps,frames,dropped,device,rec}"""
         if not self.enabled:
             return []
+        ctx = {"rec": "REC  " if info.get("rec") else "",
+               "mode": info.get("mode", ""), "fps": info.get("fps", 0.0),
+               "frames": info.get("frames", 0), "dropped": info.get("dropped", 0),
+               "device": info.get("device", "")}
         lines: list[str] = []
         if self.show_timestamp:
-            lines.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+            try:
+                lines.append(datetime.now().strftime(self.ts_format))
+            except (ValueError, TypeError):
+                lines.append(datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         if self.show_info:
-            base = (f"{info.get('mode', '')}  {info.get('fps', 0):.1f}fps"
-                    f"  f#{info.get('frames', 0)}")
-            if info.get("rec"):
-                base = "REC  " + base
-            lines.append(base)
-        if self.custom_text:
-            for seg in str(self.custom_text).split("\n"):
-                if seg.strip():
-                    lines.append(seg.strip())
+            try:
+                lines.append(self.info_format.format(**ctx))
+            except (KeyError, IndexError, ValueError):
+                lines.append(self.info_format)          # 模板错误时原样显示, 方便排查
+        for seg in str(self.custom_text).split("\n"):
+            if seg.strip():
+                lines.append(seg.strip())
         return lines
 
 
