@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cam-lab"
+version = "0.1.0"
+description = "多后端相机采样/预览/录像实验平台 — UVC免驱动 + 海康MVS, macOS/Linux/Windows"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "LinchCHN" }]
+keywords = ["camera", "uvc", "hikvision", "mvs", "opencv", "capture", "preview", "timestamp"]
+dependencies = [
+    "numpy>=1.24",
+    "opencv-python>=4.8",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.5"]
+mvs = []          # MVS 后端无需 pip 依赖, 需自装海康 MVS SDK(Runtime)
+
+[project.scripts]
+camlab = "camlab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["camlab*"]
