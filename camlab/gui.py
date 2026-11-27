@@ -28,10 +28,11 @@ class CaptureWorker(QThread):
     frameReady = Signal(np.ndarray, dict)     # BGR帧, 信息
     stateChanged = Signal(str)                # 状态文本
 
-    def __init__(self, session, overlay: OverlayConfig, parent=None):
+    def __init__(self, session, overlay_ref: list, parent=None):
+        """overlay_ref: 单元素列表, GUI 线程原子替换其中配置 -> 每帧取最新。"""
         super().__init__(parent)
         self.session = session
-        self.overlay = overlay
+        self.overlay_ref = overlay_ref
         self.recorder: RecorderThread | None = None
         self._stop = False
         self.fps = FpsCounter()
@@ -58,9 +59,10 @@ class CaptureWorker(QThread):
                     "mode": self.session.actual_mode.label() if self.session.actual_mode else "",
                     "fps": self.fps.fps, "frames": self.frames, "dropped": self.dropped,
                     "rec": rec}
-            # 预览与录像共用同一份内嵌 OSD(预览即所得)
-            if self.overlay.enabled:
-                frame = make_timestamped(frame, self.overlay, info)
+            # 预览与录像共用同一份内嵌 OSD(预览即所得, 参数实时生效)
+            overlay = self.overlay_ref[0]
+            if overlay.enabled:
+                frame = make_timestamped(frame, overlay, info)
             if self.recorder and self.recorder.is_alive():
                 self.recorder.put(frame, info)
             self.frameReady.emit(frame, info)
@@ -80,6 +82,12 @@ class MainWindow(QMainWindow):
         self.recorder: RecorderThread | None = None
         self.out_dir = DEFAULT_OUT_DIR
         self._build_ui()
+        self.live_overlay = [self._overlay_config()]      # 共享引用, 采集线程实时读取
+        for w in (self.chk_osd, self.chk_ts, self.chk_info):
+            w.toggled.connect(self._sync_live_overlay)
+        for w in (self.ed_ts_fmt, self.ed_info_fmt):
+            w.textChanged.connect(self._sync_live_overlay)
+        self.ed_text.textChanged.connect(self._sync_live_overlay)
         self.refresh_devices()
 
     # ---------- UI ----------
@@ -136,7 +144,7 @@ class MainWindow(QMainWindow):
         self.ed_info_fmt = QLineEdit("{rec}{mode}  {fps:.1f}fps  f#{frames}")
         self.ed_info_fmt.setToolTip("占位符: {rec} {mode} {fps} {frames} {dropped} {device}")
         self.ed_text = QPlainTextEdit()
-        self.ed_text.setPlaceholderText("自定义文字(支持中文, 可多行)\n如: 120度镜头 Station-A 采集者:xxx")
+        self.ed_text.setPlaceholderText("自定义文字(支持中文, 可多行)\n如: 120度镜头 Station-A 采集者:Linch")
         self.ed_text.setFixedHeight(64)
         self.ed_out = QLineEdit("output")     # 相对路径基于当前工作目录解析
         btn_dir = QPushButton("...")
@@ -264,7 +272,7 @@ class MainWindow(QMainWindow):
         self.btn_snap.setEnabled(True)
         self.btn_rec.setEnabled(True)
         self.cmb_devices.setEnabled(False)
-        self.worker = CaptureWorker(session, self._overlay_config())
+        self.worker = CaptureWorker(session, self.live_overlay)
         self.worker.frameReady.connect(self._on_frame)
         self.worker.stateChanged.connect(self.status.showMessage)
         self.worker.start()
@@ -316,6 +324,10 @@ class MainWindow(QMainWindow):
         if d:
             self.out_dir = d
             self.ed_out.setText(d)
+
+    def _sync_live_overlay(self, *_) -> None:
+        """OSD 输入变化 -> 原子替换共享配置, 采集线程下一帧即生效(无需开关相机)。"""
+        self.live_overlay[0] = self._overlay_config()
 
     def _overlay_config(self) -> OverlayConfig:
         return OverlayConfig(enabled=self.chk_osd.isChecked(),
