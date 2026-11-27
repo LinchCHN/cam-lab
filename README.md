@@ -32,15 +32,40 @@ video recording with **burned-in timestamp OSD**. macOS / Linux / Windows.
 - **双入口** — PySide6 图形界面 + 无头 CLI(自动化测试/采集脚本)
 - **文件名自描述** — `rec_20261127_132227_1280x720@30_MJPG_30fps_1280x720.mp4`
 
-## 快速开始
+## 安装与启动
+
+### 方式一：双击启动（推荐，零命令行）
+
+下载/克隆仓库后，直接双击对应平台的启动器：
+
+| 平台 | 双击 | 行为 |
+|---|---|---|
+| macOS | `launcher/macos/CamLab.command` | 自动查找 Python → 首次运行自动建 `.venv` 装依赖 → 弹出主窗口 |
+| Windows | `launcher/windows/CamLab.bat` | 同上 |
+| Linux | `launcher/linux/camlab.sh` | 同上 |
+
+首次运行约 1-2 分钟（pip 走清华镜像加速，失败自动回退官方源），之后双击秒开。
+也可以把启动器拷到桌面当桌面应用用。
+
+### 方式二：pip 安装
 
 ```bash
-pip install -r requirements.txt          # numpy / opencv-python / PySide6
+pip install -r requirements.txt
+python -m camlab            # 或安装成命令: pip install -e . 之后直接 camlab gui
+```
 
-# 图形界面
-python -m camlab                          # 或: camlab gui
+### 环境说明（要不要打包环境？）
 
-# 命令行
+- **Python 依赖很轻**：numpy + opencv-python + PySide6，启动器/requirements.txt 自动装齐，
+  无需手动配环境
+- **仓库不含海康 SDK 本体**（版权不允许再分发），MVS 后端在运行时自动探测本机已装的
+  官方 Runtime（免费，见下节）；不装 SDK 也不影响 UVC/demo 使用
+- 想要完全免安装的单文件可执行包（PyInstaller 打包 macOS .app / Windows .exe）在
+  [Roadmap](#roadmap) 中，欢迎 PR
+
+### 命令行（无 GUI，自动化友好）
+
+```bash
 python -m camlab probe                    # 枚举所有设备
 python -m camlab grab -b uvc -m "1280x720@30 MJPG" -n 30      # 抓帧测试
 python -m camlab record -b uvc -t 10 --text "Station-A"       # 录像+时间戳内嵌
@@ -49,23 +74,43 @@ python -m camlab record -b mvs -d 0 -m "2448x2048" --binning 2 -t 15
 
 十行最小示例见 [`examples/minimal_preview.py`](examples/minimal_preview.py)。
 
-## MVS 后端安装(可选)
+## SDK 关系与版本
 
-海康工业相机需要先安装 [MVS SDK Runtime](https://www.hikrobotics.com/) (免费):
+Cam-Lab **不包含、不修改任何相机厂商 SDK**，只做两件事：
+1. **自研 ctypes 绑定**（`camlab/backends/mvs/api.py`，MIT 授权）：按海康公开头文件逐字节
+   定义结构体（经 C 编译器 sizeof 校验），加载本机已安装的官方共享库；
+2. **运行时自动探测**三个平台的 MVS Runtime 路径，找不到则 `mvs` 后端自动隐藏。
 
-| 平台 | 位置 |
+| 项 | 说明 |
 |---|---|
-| macOS | `/Library/Frameworks/MvCameraControl.framework` (安装 Runtime.pkg) |
-| Linux/Jetson | `/opt/MVS/lib/{aarch64,x86_64}/libMvCameraControl.so` |
-| Windows | `MvCameraControl.dll` (安装 MVS 后自动加入 PATH) |
+| 绑定兼容的 SDK | 海康机器人 MVS SDK **V4.x 系列**（开发与实测基线：macOS V4.7.0）；V3.x 未验证，欢迎反馈 |
+| SDK 获取 | [海康机器人官网](https://www.hikrobotics.com/cn/machinevision/service/download) 免费下载对应平台 Runtime |
+| 安装位置 | macOS `/Library/Frameworks/MvCameraControl.framework` · Linux/Jetson `/opt/MVS` · Windows 自动 PATH |
+| 版权 | SDK 归海康威视/海康机器人所有；本仓库绑定代码独立编写，不含厂商源码 |
 
-未安装 SDK 时 `mvs` 后端自动隐藏, 不影响 UVC 使用。
+## 相机连接方式
 
-### GigE 相机提示
+```
+ UVC 免驱动相机          MVS GigE 工业相机                MVS USB3 工业相机
+ ─────────────          ─────────────────                ────────────────
+ USB口 ──直连── PC      网线 ──直连── PC 千兆网卡          USB3口 ──直连── PC USB3口
+ (即插即用)             (推荐直连; 多台可经千兆交换机,
+                         总带宽 ≤1Gbps 需限帧率)
+```
 
-千兆链路全分辨率帧率上限 ≈ 125MB/s ÷ 每帧字节数 (2448x2048@Mono8 ≈ 24fps)。
-出现横向黑线 = 丢包: 确认 `GevSCPSPacketSize` ≤ 网卡 MTU (默认 1500 安全;
-开巨型帧 MTU 9000 后可设 8164 提速), 本项目打开 GigE 设备时已自动做这两项防护。
+| 相机 | 接法 | 要点 |
+|---|---|---|
+| UVC / USB 免驱动 | USB 直连 | 即插即用，无需驱动；高分辨率务必选 MJPG 模式 |
+| MVS GigE | 网线直连 PC 千兆网卡（推荐） | 相机出厂 IP 通常与 PC 不同网段，SDK 会自动走链路本地地址；稳定使用建议给网卡配静态 IP 与相机同网段 |
+| MVS GigE · 多相机 | 每台独占一个网口 | 各自独立带宽互不影响；共用一个网口时需按 `带宽=分辨率×位深×帧率` 限流 |
+| MVS USB3 | USB3 口直连 | 注意别插在 USB2 口上（带宽不足） |
+
+### GigE 带宽与丢包（重要）
+
+千兆链路物理上限 ≈125MB/s：`2448x2048@Mono8(5MB/帧) → 最高约24fps`。
+出现**横向黑线 = 丢包**，本项目打开 GigE 设备时已自动防护（包大小 1500 匹配 MTU + 丢包重传）；
+要跑满全分辨率需网卡开巨型帧（MTU 9000）并把包大小设 8164。
+Linux/Jetson 的 MTU/socket 缓存/rp_filter/防火墙配置同海康《网口工业相机丢包排查手册》。
 
 ## 架构
 
