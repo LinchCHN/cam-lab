@@ -32,7 +32,7 @@ class RecorderThread(threading.Thread):
         self.fourcc = fourcc
         self.segment_seconds = float(segment_seconds or 0)
         self._q: queue.Queue = queue.Queue(maxsize=queue_size)
-        self._stop = threading.Event()
+        self._stop_event = threading.Event()
         self._writer: cv2.VideoWriter | None = None
         self._writer_path = ""
         self._seg_started = 0.0
@@ -42,7 +42,7 @@ class RecorderThread(threading.Thread):
 
     # ---- 主线程接口 ----
     def put(self, frame: np.ndarray, info: dict) -> None:
-        if self._stop.is_set():
+        if self._stop_event.is_set():
             return
         try:
             self._q.put_nowait((frame, info))
@@ -50,7 +50,7 @@ class RecorderThread(threading.Thread):
             self.frames_dropped += 1
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_event.set()
         self._q.put(None)
 
     def join_and_release(self, timeout: float = 5.0) -> None:
@@ -94,14 +94,14 @@ class RecorderThread(threading.Thread):
         ext = ext or ".mp4"
         self.base_path = f"{base}_{now_str()}{ext}"
         if not self._open_writer(self._blank_frame()):
-            self._stop.set()
+            self._stop_event.set()
 
     def _blank_frame(self) -> np.ndarray:
         h, w = self.size[1], self.size[0]
         return np.zeros((h, w, 3), dtype=np.uint8)
 
     def run(self) -> None:
-        while not self._stop.is_set():
+        while not self._stop_event.is_set():
             try:
                 item = self._q.get(timeout=0.5)
             except queue.Empty:

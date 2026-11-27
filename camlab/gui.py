@@ -272,6 +272,8 @@ class MainWindow(QMainWindow):
 
     # ---------- 帧回调 ----------
     def _on_frame(self, frame: np.ndarray, info: dict):
+        if not self.worker or not self.session:
+            return                     # 关闭过程中的残留信号
         h, w = frame.shape[:2]
         img = QImage(frame.data, w, h, 3 * w, QImage.Format.Format_BGR888)
         self.lbl_view.setPixmap(QPixmap.fromImage(img).scaled(
